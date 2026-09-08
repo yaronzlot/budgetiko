@@ -25,6 +25,7 @@
         .btn { border: none; padding: 10px 16px; font-size: 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         .btn-success { background-color: #28a745; color: white; }
         .btn-danger { background-color: #dc3545; color: white; font-size: 12px; padding: 5px 10px; }
+        .btn-secondary { background-color: #6c757d; color: white; }
         .btn-warning { background-color: #ffc107; color: #212529; font-size: 13px; padding: 6px 12px; }
         .btn-primary { background-color: #0056b3; color: white; padding: 5px 12px; font-size: 13px; }
         select, input[type="text"] { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
@@ -40,6 +41,10 @@
         .close-btn:hover { color: #000; }
         .edit-select, .note-input { font-size: 13px; padding: 4px; width: 100%; box-sizing: border-box; }
         .cat-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
+        
+        .admin-box { background-color: #f8f9fa; border: 1px solid #e0e0e0; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+        .admin-box h4 { margin-top: 0; margin-bottom: 8px; color: #333; }
+        .info-text { font-size: 13px; color: #555; background: #eef2f7; padding: 8px; border-radius: 4px; border-right: 3px solid #0056b3; }
     </style>
 </head>
 <body>
@@ -55,7 +60,7 @@
     <div id="permTab" class="tab-content active">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h3>ריכוז הוצאות לפי קטגוריה</h3>
-            <button class="btn btn-danger" onclick="clearDatabase()">איפוס נתונים</button>
+            <button class="btn btn-secondary" onclick="openAdminModal()">ניהול</button>
         </div>
 
         <!-- סינון לפי חודש חיוב -->
@@ -122,7 +127,7 @@
     </div>
 </div>
 
-<!-- חלון קופץ 1: פירוט ועריכת הקטגוריה וההערה של עסקה -->
+<!-- חלון קופץ: פירוט ועריכת הקטגוריה וההערה של עסקה -->
 <div id="detailsModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -146,7 +151,7 @@
     </div>
 </div>
 
-<!-- חלון קופץ 2: עריכה ומחיקה של קטגוריות -->
+<!-- חלון קופץ: עריכה ומחיקה של קטגוריות -->
 <div id="categoryManageModal" class="modal">
     <div class="modal-content" style="max-width: 500px;">
         <div class="modal-header">
@@ -154,6 +159,52 @@
             <span class="close-btn" onclick="closeModal('categoryManageModal')">&times;</span>
         </div>
         <div id="categoryListContainer" style="margin-top: 15px;"></div>
+    </div>
+</div>
+
+<!-- חלון קופץ חדש: ניהול מערכת (גיבוי, שחזור ואיפוס) -->
+<div id="adminModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>ניהול מערכת ונתונים</h3>
+            <span class="close-btn" onclick="closeModal('adminModal')">&times;</span>
+        </div>
+        
+        <div style="margin-top: 15px;">
+            <!-- מיקום נתונים -->
+            <div class="admin-box">
+                <h4>📍 מיקום ה-Database וקבצי הגיבוי</h4>
+                <div class="info-text">
+                    <strong>מיקום ה-Database:</strong> הנתונים שמורים מקומית בדפדפן בזיכרון ה-<code>LocalStorage</code> תחת המפתחות:<br>
+                    • <code>app_expenses_db</code> (עסקאות)<br>
+                    • <code>app_categories</code> (קטגוריות)<br>
+                    • <code>app_merchant_memory</code> (זיכרון זיהוי)<br><br>
+                    <strong>מיקום קובץ הגיבוי:</strong> בעת גיבוי, קובץ <code>JSON</code> יורד אל תיקיית ההורדות במכשיר שלך (<code>Downloads</code>).
+                </div>
+            </div>
+
+            <!-- גיבוי ושחזור -->
+            <div class="admin-box">
+                <h4>💾 גיבוי ושחזור נתונים</h4>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button class="btn btn-primary" onclick="exportBackup()">הורד קובץ גיבוי (Export)</button>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <label for="importFileInput" class="btn btn-warning" style="margin: 0; cursor: pointer;">טען קובץ שחזור (Import)</label>
+                    <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="importBackup(event)">
+                </div>
+            </div>
+
+            <!-- איפוס נתונים -->
+            <div class="admin-box" style="border-color: #f5c6cb; background-color: #fdf7f7;">
+                <h4 style="color: #dc3545;">⚠️ איפוס נתונים</h4>
+                <p style="font-size: 13px; color: #666; margin-bottom: 8px;">פעולה זו תמחק את כל העסקאות והזיכרון. לרשום את המילה <strong>"מחק"</strong> לאישור:</p>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="deleteConfirmInput" placeholder='רשום "מחק" כאן...' style="width: 150px;">
+                    <button class="btn btn-danger" onclick="clearDatabase()">איפוס נתונים לצמיטות</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -369,7 +420,6 @@
         const cleanMerchant = cleanString(merchant);
         const m = cleanMerchant.toLowerCase();
 
-        // זיהוי אוטומטי ל-BIT / PayBox
         if (m.includes('bit') || m.includes('ביט') || m.includes('paybox') || m.includes('פייבוקס')) {
             if (categories.includes('BIT')) return 'BIT';
         }
@@ -586,6 +636,11 @@
         }
     }
 
+    function openAdminModal() {
+        document.getElementById('deleteConfirmInput').value = '';
+        document.getElementById('adminModal').style.display = 'block';
+    }
+
     function closeModal(modalId) {
         document.getElementById(modalId).style.display = 'none';
     }
@@ -593,19 +648,79 @@
     window.onclick = function(event) {
         const modal1 = document.getElementById('detailsModal');
         const modal2 = document.getElementById('categoryManageModal');
+        const modal3 = document.getElementById('adminModal');
         if (event.target === modal1) closeModal('detailsModal');
         if (event.target === modal2) closeModal('categoryManageModal');
+        if (event.target === modal3) closeModal('adminModal');
     };
 
     function clearDatabase() {
-        if (confirm('האם למחוק את כל הנתונים ב-Database ובזיכרון הקטגוריות?')) {
+        const inputVal = document.getElementById('deleteConfirmInput').value.trim();
+        if (inputVal !== 'מחק') {
+            return alert('כדי לאפס את הנתונים, עליך להקליד מפורשות את המילה "מחק" בתיבת הטקסט.');
+        }
+
+        if (confirm('אזהרה אחרונה: האם אתה בטוח שברצונך למחוק את כל הנתונים ב-Database?')) {
             localStorage.removeItem('app_expenses_db');
             localStorage.removeItem('app_merchant_memory');
             dbExpenses = [];
             merchantMemory = {};
             populateMonthFilter();
             renderPermTable();
+            closeModal('adminModal');
+            alert('הנתונים אופסו בהצלחה.');
         }
+    }
+
+    function exportBackup() {
+        const data = {
+            categories: categories,
+            expenses: dbExpenses,
+            merchantMemory: merchantMemory,
+            exportDate: new Date().toISOString()
+        };
+
+        const jsonStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `expenses_backup_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function importBackup(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (data.expenses && data.categories) {
+                    categories = data.categories;
+                    dbExpenses = data.expenses;
+                    merchantMemory = data.merchantMemory || {};
+
+                    saveCategories();
+                    localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
+                    localStorage.setItem('app_merchant_memory', JSON.stringify(merchantMemory));
+
+                    populateMonthFilter();
+                    renderPermTable();
+                    closeModal('adminModal');
+                    alert('הנתונים שוחזרו בהצלחה מתוך קובץ הגיבוי!');
+                } else {
+                    alert('קובץ הגיבוי אינו בפורמט התקין.');
+                }
+            } catch (err) {
+                alert('שגיאה בקריאת קובץ הגיבוי.');
+            }
+        };
+        reader.readAsText(file);
     }
 
     function openTab(tabId, evt) {
