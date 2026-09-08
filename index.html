@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 15px; direction: rtl; }
-        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .container { max-width: 1050px; margin: 0 auto; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .tabs { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 15px; }
         .tab-btn { padding: 10px 15px; cursor: pointer; border: none; background: none; font-size: 15px; font-weight: bold; color: #555; }
         .tab-btn.active { border-bottom: 4px solid #0056b3; color: #0056b3; }
@@ -34,11 +34,11 @@
         
         /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
-        .modal-content { background-color: #fff; margin: 5% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 750px; max-height: 80vh; overflow-y: auto; }
+        .modal-content { background-color: #fff; margin: 4% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 850px; max-height: 85vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
         .close-btn { font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
         .close-btn:hover { color: #000; }
-        .edit-select { font-size: 13px; padding: 4px; }
+        .edit-select, .note-input { font-size: 13px; padding: 4px; width: 100%; box-sizing: border-box; }
         .cat-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
     </style>
 </head>
@@ -112,6 +112,7 @@
                     <th>שם בית עסק</th>
                     <th>סכום חיוב (₪)</th>
                     <th>שיוך לקטגוריה</th>
+                    <th>הערה / פירוט הוצאה</th>
                 </tr>
             </thead>
             <tbody id="tempTableBody"></tbody>
@@ -121,22 +122,23 @@
     </div>
 </div>
 
-<!-- חלון קופץ 1: פירוט ועריכת הקטגוריה של עסקה -->
+<!-- חלון קופץ 1: פירוט ועריכת הקטגוריה וההערה של עסקה -->
 <div id="detailsModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="modalTitle">פירוט עסקאות</h3>
             <span class="close-btn" onclick="closeModal('detailsModal')">&times;</span>
         </div>
-        <p style="font-size: 13px; color: #666; margin-top: 5px;">* ניתן לשנות את הקטגוריה של העסקה ולשמור.</p>
+        <p style="font-size: 13px; color: #666; margin-top: 5px;">* ניתן לערוך את הקטגוריה וההערה של העסקה וללחוץ שמור.</p>
         <table style="margin-top: 10px;">
             <thead>
                 <tr>
-                    <th>תאריך רכישה</th>
-                    <th>שם בית עסק</th>
-                    <th>סכום (₪)</th>
-                    <th>קטגוריה</th>
-                    <th>פעולה</th>
+                    <th style="width: 12%;">תאריך</th>
+                    <th style="width: 25%;">שם בית עסק</th>
+                    <th style="width: 13%;">סכום (₪)</th>
+                    <th style="width: 20%;">קטגוריה</th>
+                    <th style="width: 20%;">הערה</th>
+                    <th style="width: 10%;">פעולה</th>
                 </tr>
             </thead>
             <tbody id="modalTableBody"></tbody>
@@ -157,7 +159,7 @@
 
 <script>
     const defaultCategories = [
-        "מצרכים", "מיסים", "ביטוחים", "רכבים", "כדורסל", 
+        "BIT", "מצרכים", "מיסים", "ביטוחים", "רכבים", "כדורסל", 
         "חסכון", "מסעדות ובילויים", "שונות חד פעמי", 
         "בריאות וטיפוח", "מתנות", "גוגל-אפל-בינה", 
         "עמלות בנק", "ביגוד והנעלה", "שיפוץ/תיקון ורכש", "חריגים +500"
@@ -175,6 +177,10 @@
     let tempTransactions = [];
 
     document.addEventListener("DOMContentLoaded", () => {
+        if (!categories.includes("BIT")) {
+            categories.unshift("BIT");
+            saveCategories();
+        }
         populateMonthFilter();
         renderPermTable();
     });
@@ -227,7 +233,6 @@
         categories[index] = newName;
         saveCategories();
 
-        // עדכון בקובץ הזיכרון ובנתונים
         dbExpenses.forEach(item => { if (item.category === oldName) item.category = newName; });
         tempTransactions.forEach(item => { if (item.category === oldName) item.category = newName; });
         Object.keys(merchantMemory).forEach(m => { if (merchantMemory[m] === oldName) merchantMemory[m] = newName; });
@@ -346,7 +351,8 @@
                         chargeDateMonth: calculatedChargeMonth,
                         merchant: merchantVal,
                         amount: amount,
-                        category: suggestCategory(merchantVal, amount)
+                        category: suggestCategory(merchantVal, amount),
+                        note: ''
                     });
                 }
             }
@@ -361,12 +367,17 @@
 
     function suggestCategory(merchant, amount) {
         const cleanMerchant = cleanString(merchant);
+        const m = cleanMerchant.toLowerCase();
+
+        // זיהוי אוטומטי ל-BIT / PayBox
+        if (m.includes('bit') || m.includes('ביט') || m.includes('paybox') || m.includes('פייבוקס')) {
+            if (categories.includes('BIT')) return 'BIT';
+        }
 
         if (merchantMemory[cleanMerchant] && categories.includes(merchantMemory[cleanMerchant])) {
             return merchantMemory[cleanMerchant];
         }
 
-        const m = cleanMerchant.toLowerCase();
         if (m.includes('apple') || m.includes('prime video') || m.includes('google')) return 'גוגל-אפל-בינה';
         if (m.includes('אושר עד') || m.includes('מכולת') || m.includes('דליקטס') || m.includes('שופרסל')) return 'מצרכים';
         if (m.includes('כביש') || m.includes('פנגו') || m.includes('דרך ארץ') || m.includes('אלון') || m.includes('סונול') || m.includes('דיזול')) return 'רכבים';
@@ -407,6 +418,9 @@
                     <select onchange="tempTransactions[${index}].category = this.value; updateMerchantMemory('${item.merchant.replace(/'/g, "\\'")}', this.value);">
                         ${optionsHtml}
                     </select>
+                </td>
+                <td>
+                    <input type="text" class="note-input" value="${item.note || ''}" placeholder="הוסף הערה..." onchange="tempTransactions[${index}].note = this.value">
                 </td>
             `;
             tbody.appendChild(tr);
@@ -543,7 +557,10 @@
                     </select>
                 </td>
                 <td>
-                    <button class="btn btn-primary" onclick="saveTransactionCategory(${item.id})">שמור</button>
+                    <input type="text" class="note-input" id="note_${item.id}" value="${item.note || ''}" placeholder="הערה...">
+                </td>
+                <td>
+                    <button class="btn btn-primary" onclick="saveTransactionDetails(${item.id})">שמור</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -552,12 +569,14 @@
         document.getElementById('detailsModal').style.display = 'block';
     }
 
-    function saveTransactionCategory(id) {
+    function saveTransactionDetails(id) {
         const newCat = document.getElementById(`cat_${id}`).value;
+        const newNote = document.getElementById(`note_${id}`).value;
 
         const dbIndex = dbExpenses.findIndex(item => item.id === id);
         if (dbIndex !== -1) {
             dbExpenses[dbIndex].category = newCat;
+            dbExpenses[dbIndex].note = newNote;
             updateMerchantMemory(dbExpenses[dbIndex].merchant, newCat);
 
             localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
