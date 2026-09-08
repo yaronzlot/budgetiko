@@ -28,7 +28,7 @@
         .btn-secondary { background-color: #6c757d; color: white; }
         .btn-warning { background-color: #ffc107; color: #212529; font-size: 13px; padding: 6px 12px; }
         .btn-primary { background-color: #0056b3; color: white; padding: 5px 12px; font-size: 13px; }
-        select, input[type="text"], textarea { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+        select, input[type="text"], input[type="number"], input[type="date"], textarea { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
         .amount { font-weight: bold; color: #dc3545; }
         .total-row { background-color: #e2e3e5; font-weight: bold; }
         .gemini-badge { font-size: 12px; color: #666; font-style: italic; text-align: left; margin-bottom: 5px; }
@@ -53,6 +53,10 @@
         .admin-box { background-color: #f8f9fa; border: 1px solid #e0e0e0; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
         .admin-box h4 { margin-top: 0; margin-bottom: 8px; color: #333; }
         .info-text { font-size: 13px; color: #555; background: #eef2f7; padding: 8px; border-radius: 4px; border-right: 3px solid #0056b3; }
+
+        .manual-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; }
+        .manual-form label { font-size: 13px; font-weight: bold; display: block; margin-bottom: 4px; }
+        .manual-form input { width: 100%; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -151,7 +155,7 @@
             <thead>
                 <tr>
                     <th style="width: 10%;">תאריך</th>
-                    <th style="width: 20%;">שם בית עסק</th>
+                    <th style="width: 20%;">שם בית עסק / תיאור</th>
                     <th style="width: 12%;">סכום (₪)</th>
                     <th style="width: 18%;">קטגוריה</th>
                     <th style="width: 32%;">הערה (שדה מורחב)</th>
@@ -192,15 +196,44 @@
     </div>
 </div>
 
-<!-- חלון קופץ חדש: ניהול מערכת (גיבוי, שחזור ואיפוס) -->
+<!-- חלון קופץ: ניהול מערכת + הוספת הוצאות עו"ש ידניות -->
 <div id="adminModal" class="modal">
-    <div class="modal-content" style="max-width: 600px;">
+    <div class="modal-content" style="max-width: 650px;">
         <div class="modal-header">
             <h3>ניהול מערכת ונתונים</h3>
             <span class="close-btn" onclick="closeModal('adminModal')">&times;</span>
         </div>
         
         <div style="margin-top: 15px;">
+
+            <!-- הוספת הוצאה ידנית מחשבון הבנק (עו"ש) -->
+            <div class="admin-box" style="border-color: #28a745; background-color: #f4fff6;">
+                <h4 style="color: #1e7e34;">🏦 הוספת הוצאה ידנית מחשבון הבנק (עו"ש)</h4>
+                <p style="font-size: 13px; color: #555; margin-bottom: 10px;">הוצאות אלו ישויכו אוטומטית לקטגוריה <strong>"עו"ש"</strong> ויוצגו לצד הוצאות הטרנזקציות מכרטיסי האשראי.</p>
+                
+                <div class="manual-form">
+                    <div>
+                        <label for="manualMerchant">שם ההוצאה / תיאור:</label>
+                        <input type="text" id="manualMerchant" placeholder="לדוגמה: שכירות / ועד בית">
+                    </div>
+                    <div>
+                        <label for="manualDate">תאריך ההוצאה:</label>
+                        <input type="date" id="manualDate" onchange="autoFillChargeMonth()">
+                    </div>
+                    <div>
+                        <label for="manualAmount">סכום (₪):</label>
+                        <input type="number" id="manualAmount" step="0.01" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label for="manualChargeMonth">חודש חיוב (YYYY-MM):</label>
+                        <input type="month" id="manualChargeMonth">
+                    </div>
+                </div>
+                <div style="margin-top: 12px; text-align: left;">
+                    <button class="btn btn-success" onclick="addManualBankExpense()">+ הוסף הוצאת עו"ש</button>
+                </div>
+            </div>
+
             <!-- מיקום נתונים -->
             <div class="admin-box">
                 <h4>📍 מיקום ה-Database וקבצי הגיבוי</h4>
@@ -240,7 +273,7 @@
 
 <script>
     const defaultCategories = [
-        "BIT", "מצרכים", "מיסים", "ביטוחים", "רכבים", "כדורסל", 
+        "עו\"ש", "BIT", "מצרכים", "מיסים", "ביטוחים", "רכבים", "כדורסל", 
         "חסכון", "מסעדות ובילויים", "שונות חד פעמי", 
         "בריאות וטיפוח", "מתנות", "גוגל-אפל-בינה", 
         "עמלות בנק", "ביגוד והנעלה", "שיפוץ/תיקון ורכש", "חריגים +500"
@@ -263,16 +296,73 @@
     let tempTransactions = [];
 
     document.addEventListener("DOMContentLoaded", () => {
-        if (!categories.includes("BIT")) {
-            categories.unshift("BIT");
+        if (!categories.includes("עו\"ש")) {
+            categories.unshift("עו\"ש");
             saveCategories();
         }
+        if (!categories.includes("BIT")) {
+            categories.splice(1, 0, "BIT");
+            saveCategories();
+        }
+        
+        // הגדרת תאריך ברירת מחדל להוצאה ידנית בטופס (היום)
+        const today = new Date().toISOString().split('T')[0];
+        const manualDateElem = document.getElementById('manualDate');
+        if (manualDateElem) {
+            manualDateElem.value = today;
+            autoFillChargeMonth();
+        }
+
         populateMonthFilter();
         renderPermTable();
     });
 
     function saveCategories() {
         localStorage.setItem('app_categories', JSON.stringify(categories));
+    }
+
+    function autoFillChargeMonth() {
+        const dateVal = document.getElementById('manualDate').value;
+        if (dateVal) {
+            document.getElementById('manualChargeMonth').value = dateVal.substring(0, 7);
+        }
+    }
+
+    function addManualBankExpense() {
+        const merchant = cleanString(document.getElementById('manualMerchant').value);
+        const purchaseDate = document.getElementById('manualDate').value;
+        const amount = parseFloat(document.getElementById('manualAmount').value);
+        let chargeMonth = document.getElementById('manualChargeMonth').value;
+
+        if (!merchant) return alert('נא להזין שם/תיאור להוצאה.');
+        if (!purchaseDate) return alert('נא לבחור תאריך הוצאה.');
+        if (isNaN(amount) || amount <= 0) return alert('נא להזין סכום תקין.');
+
+        if (!chargeMonth) {
+            chargeMonth = purchaseDate.substring(0, 7);
+        }
+
+        const newExpense = {
+            id: Date.now() + Math.random(),
+            purchaseDate: purchaseDate,
+            chargeDateMonth: chargeMonth,
+            merchant: merchant,
+            amount: amount,
+            category: 'עו"ש',
+            note: 'הוצאה ידנית מהבנק (עו"ש)'
+        };
+
+        dbExpenses.push(newExpense);
+        localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
+
+        // ניקוי הטופס
+        document.getElementById('manualMerchant').value = '';
+        document.getElementById('manualAmount').value = '';
+
+        populateMonthFilter();
+        renderPermTable();
+
+        alert(`הוצאת עו"ש על סך ₪${amount.toFixed(2)} עבור "${merchant}" נוספה בהצלחה!`);
     }
 
     function addCategory() {
@@ -652,7 +742,6 @@
             const tr = document.createElement('tr');
             tr.className = 'clickable-row';
             
-            // בלחיצה על השורה נפתח חלון עריכת ההערה המורחב
             tr.onclick = (e) => {
                 if (['INPUT', 'SELECT', 'BUTTON'].includes(e.target.tagName)) return;
                 openExpandedNote(item.id);
@@ -705,7 +794,6 @@
             dbExpenses[dbIndex].note = newNote;
             localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
 
-            // עדכון השדה הקיים בטבלה
             const inputField = document.getElementById(`note_${id}`);
             if (inputField) inputField.value = newNote;
 
