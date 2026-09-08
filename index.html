@@ -15,7 +15,7 @@
         .tab-btn.active { border-bottom: 4px solid #0056b3; color: #0056b3; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .upload-section, .filter-section { margin-bottom: 15px; padding: 12px; background-color: #e9ecef; border-radius: 6px; }
+        .upload-section, .filter-section, .category-management-section { margin-bottom: 15px; padding: 12px; background-color: #e9ecef; border-radius: 6px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 8px 10px; border: 1px solid #ddd; text-align: right; font-size: 14px; }
         th { background-color: #0056b3; color: white; }
@@ -25,8 +25,9 @@
         .btn { border: none; padding: 10px 16px; font-size: 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         .btn-success { background-color: #28a745; color: white; }
         .btn-danger { background-color: #dc3545; color: white; font-size: 12px; padding: 5px 10px; }
+        .btn-warning { background-color: #ffc107; color: #212529; font-size: 13px; padding: 6px 12px; }
         .btn-primary { background-color: #0056b3; color: white; padding: 5px 12px; font-size: 13px; }
-        select { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+        select, input[type="text"] { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
         .amount { font-weight: bold; color: #dc3545; }
         .total-row { background-color: #e2e3e5; font-weight: bold; }
         .gemini-badge { font-size: 12px; color: #666; font-style: italic; text-align: left; margin-bottom: 5px; }
@@ -38,6 +39,7 @@
         .close-btn { font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
         .close-btn:hover { color: #000; }
         .edit-select { font-size: 13px; padding: 4px; }
+        .cat-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -90,6 +92,18 @@
             <input type="file" id="fileInput" accept=".xlsx, .xls" />
         </div>
 
+        <!-- ניהול קטגוריות בקליטה זמנית -->
+        <div class="category-management-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong>הוספת קטגוריה חדשה:</strong>
+                    <input type="text" id="newCategoryInput" placeholder="שם הקטגוריה..." style="width: 180px;">
+                    <button class="btn btn-primary" onclick="addCategory()">הוסף</button>
+                </div>
+                <button class="btn btn-warning" onclick="openCategoryManageModal()">ניהול / עריכת קטגוריות</button>
+            </div>
+        </div>
+
         <h3>תנועות שהוקלטו (זמני)</h3>
         <table>
             <thead>
@@ -107,12 +121,12 @@
     </div>
 </div>
 
-<!-- חלון קופץ (Modal) לפירוט ועריכת הקטגוריה בלבד -->
+<!-- חלון קופץ 1: פירוט ועריכת הקטגוריה של עסקה -->
 <div id="detailsModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="modalTitle">פירוט עסקאות</h3>
-            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <span class="close-btn" onclick="closeModal('detailsModal')">&times;</span>
         </div>
         <p style="font-size: 13px; color: #666; margin-top: 5px;">* ניתן לשנות את הקטגוריה של העסקה ולשמור.</p>
         <table style="margin-top: 10px;">
@@ -130,8 +144,19 @@
     </div>
 </div>
 
+<!-- חלון קופץ 2: עריכה ומחיקה של קטגוריות -->
+<div id="categoryManageModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3>ניהול ועריכת קטגוריות</h3>
+            <span class="close-btn" onclick="closeModal('categoryManageModal')">&times;</span>
+        </div>
+        <div id="categoryListContainer" style="margin-top: 15px;"></div>
+    </div>
+</div>
+
 <script>
-    const categories = [
+    const defaultCategories = [
         "מצרכים", "מיסים", "ביטוחים", "רכבים", "כדורסל", 
         "חסכון", "מסעדות ובילויים", "שונות חד פעמי", 
         "בריאות וטיפוח", "מתנות", "גוגל-אפל-בינה", 
@@ -144,6 +169,7 @@
         'ספטמבר': '09', 'אוקטובר': '10', 'נובמבר': '11', 'דצמבר': '12'
     };
 
+    let categories = JSON.parse(localStorage.getItem('app_categories')) || defaultCategories;
     let dbExpenses = JSON.parse(localStorage.getItem('app_expenses_db')) || [];
     let merchantMemory = JSON.parse(localStorage.getItem('app_merchant_memory')) || {};
     let tempTransactions = [];
@@ -152,6 +178,79 @@
         populateMonthFilter();
         renderPermTable();
     });
+
+    function saveCategories() {
+        localStorage.setItem('app_categories', JSON.stringify(categories));
+    }
+
+    function addCategory() {
+        const input = document.getElementById('newCategoryInput');
+        const catName = cleanString(input.value);
+        if (!catName) return alert('נא להזין שם קטגוריה.');
+        if (categories.includes(catName)) return alert('קטגוריה זו כבר קיימת.');
+
+        categories.push(catName);
+        saveCategories();
+        input.value = '';
+        renderTempTable();
+        alert(`הקטגוריה "${catName}" נוספה בהצלחה!`);
+    }
+
+    function openCategoryManageModal() {
+        renderCategoryManageList();
+        document.getElementById('categoryManageModal').style.display = 'block';
+    }
+
+    function renderCategoryManageList() {
+        const container = document.getElementById('categoryListContainer');
+        container.innerHTML = '';
+
+        categories.forEach((cat, index) => {
+            const item = document.createElement('div');
+            item.className = 'cat-list-item';
+            item.innerHTML = `
+                <input type="text" id="cat_edit_${index}" value="${cat}" style="width: 60%;">
+                <div>
+                    <button class="btn btn-primary" onclick="updateCategoryName(${index})">עדכן</button>
+                    <button class="btn btn-danger" onclick="deleteCategory(${index})">מחק</button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    function updateCategoryName(index) {
+        const newName = cleanString(document.getElementById(`cat_edit_${index}`).value);
+        if (!newName) return alert('שם הקטגוריה אינו יכול להיות ריק.');
+        
+        const oldName = categories[index];
+        categories[index] = newName;
+        saveCategories();
+
+        // עדכון בקובץ הזיכרון ובנתונים
+        dbExpenses.forEach(item => { if (item.category === oldName) item.category = newName; });
+        tempTransactions.forEach(item => { if (item.category === oldName) item.category = newName; });
+        Object.keys(merchantMemory).forEach(m => { if (merchantMemory[m] === oldName) merchantMemory[m] = newName; });
+
+        localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
+        localStorage.setItem('app_merchant_memory', JSON.stringify(merchantMemory));
+
+        renderCategoryManageList();
+        renderTempTable();
+        renderPermTable();
+    }
+
+    function deleteCategory(index) {
+        const catName = categories[index];
+        if (!confirm(`האם למחוק את הקטגוריה "${catName}"?`)) return;
+
+        categories.splice(index, 1);
+        saveCategories();
+
+        renderCategoryManageList();
+        renderTempTable();
+        renderPermTable();
+    }
 
     document.getElementById('fileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
@@ -176,7 +275,6 @@
     function formatDateToISO(dateVal) {
         let dateStr = cleanString(dateVal);
         if (!dateStr) return '';
-        
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
         
         let parts = dateStr.split(/[\/\.-]/);
@@ -200,7 +298,6 @@
         return isoStr;
     }
 
-    // זיהוי חודש ושנת החיוב מכותרת הדוח (למשל: "ספטמבר 2026")
     function extractStatementMonth(data) {
         for (let r = 0; r < Math.min(10, data.length); r++) {
             let row = data[r];
@@ -223,8 +320,6 @@
 
     function processExcelData(data) {
         tempTransactions = [];
-        
-        // זיהוי חודש החיוב מכותרת הקובץ
         const statementMonth = extractStatementMonth(data);
 
         for (let i = 0; i < data.length; i++) {
@@ -243,7 +338,6 @@
 
                 if (!isNaN(amount) && amount > 0) {
                     const parsedPDate = formatDateToISO(dateVal);
-                    // אם זוהה חודש חיוב בכותרת נשתמש בו, אחרת נשתמש בתאריך הרכישה
                     const calculatedChargeMonth = statementMonth ? statementMonth : parsedPDate.substring(0, 7);
 
                     tempTransactions.push({
@@ -268,7 +362,7 @@
     function suggestCategory(merchant, amount) {
         const cleanMerchant = cleanString(merchant);
 
-        if (merchantMemory[cleanMerchant]) {
+        if (merchantMemory[cleanMerchant] && categories.includes(merchantMemory[cleanMerchant])) {
             return merchantMemory[cleanMerchant];
         }
 
@@ -283,7 +377,7 @@
         if (m.includes('מגדל')) return 'ביטוחים';
         if (m.includes('עיריית') || m.includes('מעיינות')) return 'מיסים';
         if (parseFloat(amount) >= 500) return 'חריגים +500';
-        return 'שונות חד פעמי';
+        return categories.includes('שונות חד פעמי') ? 'שונות חד פעמי' : (categories[0] || '');
     }
 
     function updateMerchantMemory(merchant, category) {
@@ -473,15 +567,15 @@
         }
     }
 
-    function closeModal() {
-        document.getElementById('detailsModal').style.display = 'none';
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
     }
 
     window.onclick = function(event) {
-        const modal = document.getElementById('detailsModal');
-        if (event.target === modal) {
-            closeModal();
-        }
+        const modal1 = document.getElementById('detailsModal');
+        const modal2 = document.getElementById('categoryManageModal');
+        if (event.target === modal1) closeModal('detailsModal');
+        if (event.target === modal2) closeModal('categoryManageModal');
     };
 
     function clearDatabase() {
