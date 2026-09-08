@@ -33,6 +33,13 @@
         .total-row { background-color: #e2e3e5; font-weight: bold; }
         .gemini-badge { font-size: 12px; color: #666; font-style: italic; text-align: left; margin-bottom: 5px; }
         
+        .expenses-month-subtitle {
+            font-size: 15px;
+            font-weight: bold;
+            color: #0056b3;
+            margin-top: 6px;
+        }
+
         /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
         .modal-content { background-color: #fff; margin: 2% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 1000px; max-height: 90vh; overflow-y: auto; }
@@ -65,11 +72,15 @@
         </div>
 
         <!-- סינון לפי חודש חיוב -->
-        <div class="filter-section" style="display: flex; align-items: center; gap: 10px;">
-            <label for="monthFilter"><strong>בחר חודש חיוב לצפייה:</strong></label>
-            <select id="monthFilter" onchange="renderPermTable()">
-                <option value="all">כל החודשים</option>
-            </select>
+        <div class="filter-section">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label for="monthFilter"><strong>בחר חודש חיוב לצפייה:</strong></label>
+                <select id="monthFilter" onchange="renderPermTable()">
+                    <option value="all">כל החודשים</option>
+                </select>
+            </div>
+            <!-- כותרת דינמית לחודש ההוצאות בפועל -->
+            <div id="expenseMonthTitle" class="expenses-month-subtitle"></div>
         </div>
 
         <table>
@@ -240,6 +251,11 @@
         'מאי': '05', 'יוני': '06', 'יולי': '07', 'אוגוסט': '08',
         'ספטמבר': '09', 'אוקטובר': '10', 'נובמבר': '11', 'דצמבר': '12'
     };
+
+    const hebrewMonthNames = [
+        "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
+        "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"
+    ];
 
     let categories = JSON.parse(localStorage.getItem('app_categories')) || defaultCategories;
     let dbExpenses = JSON.parse(localStorage.getItem('app_expenses_db')) || [];
@@ -546,6 +562,28 @@
         }
     }
 
+    function updateExpenseMonthTitle(selectedMonth) {
+        const titleDiv = document.getElementById('expenseMonthTitle');
+        if (selectedMonth === 'all') {
+            titleDiv.innerText = '';
+            return;
+        }
+
+        const [yearStr, monthStr] = selectedMonth.split('-');
+        let year = parseInt(yearStr, 10);
+        let month = parseInt(monthStr, 10);
+
+        // חישוב חודש קודם
+        month -= 1;
+        if (month === 0) {
+            month = 12;
+            year -= 1;
+        }
+
+        const prevMonthName = hebrewMonthNames[month - 1];
+        titleDiv.innerText = `(הוצאות חודש ${prevMonthName} ${year})`;
+    }
+
     function getFilteredExpenses() {
         const selectedMonth = document.getElementById('monthFilter').value;
         if (selectedMonth === 'all') return dbExpenses;
@@ -557,6 +595,9 @@
     }
 
     function renderPermTable() {
+        const selectedMonth = document.getElementById('monthFilter').value;
+        updateExpenseMonthTitle(selectedMonth);
+
         const tbody = document.getElementById('permTableBody');
         tbody.innerHTML = '';
 
