@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Gemini AI Code Generator">
+    <title>ניהול הוצאות - Database מקומי (Gemini Edition)</title>
+    <!-- ספריית Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 15px; direction: rtl; }
+        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .tabs { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 15px; }
+        .tab-btn { padding: 10px 15px; cursor: pointer; border: none; background: none; font-size: 15px; font-weight: bold; color: #555; }
+        .tab-btn.active { border-bottom: 4px solid #0056b3; color: #0056b3; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .upload-section, .filter-section { margin-bottom: 15px; padding: 12px; background-color: #e9ecef; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 8px 10px; border: 1px solid #ddd; text-align: right; font-size: 14px; }
+        th { background-color: #0056b3; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .clickable-row { cursor: pointer; transition: background-color 0.2s; }
+        .clickable-row:hover { background-color: #e2eafc; }
+        .btn { border: none; padding: 10px 16px; font-size: 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; font-size: 12px; padding: 5px 10px; }
+        .btn-primary { background-color: #0056b3; color: white; padding: 5px 12px; font-size: 13px; }
+        select { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+        .amount { font-weight: bold; color: #dc3545; }
+        .total-row { background-color: #e2e3e5; font-weight: bold; }
+        .gemini-badge { font-size: 12px; color: #666; font-style: italic; text-align: left; margin-bottom: 5px; }
+        
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fff; margin: 5% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 750px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .close-btn { font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
+        .close-btn:hover { color: #000; }
+        .edit-select { font-size: 13px; padding: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="gemini-badge">Generated & Optimized by Gemini AI ✦</div>
+    <div class="tabs">
+        <button id="permTabBtn" class="tab-btn active" onclick="openTab('permTab', event)">ריכוז הוצאות (DB)</button>
+        <button id="tempTabBtn" class="tab-btn" onclick="openTab('tempTab', event)">קליטה זמנית</button>
+    </div>
+
+    <!-- טאב 1: Database קבוע -->
+    <div id="permTab" class="tab-content active">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>ריכוז הוצאות לפי קטגוריה</h3>
+            <button class="btn btn-danger" onclick="clearDatabase()">איפוס נתונים</button>
+        </div>
+
+        <!-- סינון לפי חודש חיוב -->
+        <div class="filter-section" style="display: flex; align-items: center; gap: 10px;">
+            <label for="monthFilter"><strong>בחר חודש חיוב לצפייה:</strong></label>
+            <select id="monthFilter" onchange="renderPermTable()">
+                <option value="all">כל החודשים</option>
+            </select>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>שם קטגוריה</th>
+                    <th>מספר עסקאות</th>
+                    <th>סה"כ סכום ששולם (₪)</th>
+                </tr>
+            </thead>
+            <tbody id="permTableBody"></tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td>סה"כ כולל</td>
+                    <td id="totalCount">0</td>
+                    <td id="totalAmount" class="amount">₪0.00</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <!-- טאב 2: קליטה זמנית -->
+    <div id="tempTab" class="tab-content">
+        <div class="upload-section">
+            <label for="fileInput"><strong>1. טען קובץ Excel של כרטיס אשראי:</strong></label><br><br>
+            <input type="file" id="fileInput" accept=".xlsx, .xls" />
+        </div>
+
+        <h3>תנועות שהוקלטו (זמני)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>תאריך רכישה</th>
+                    <th>שם בית עסק</th>
+                    <th>סכום חיוב (₪)</th>
+                    <th>שיוך לקטגוריה</th>
+                </tr>
+            </thead>
+            <tbody id="tempTableBody"></tbody>
+        </table>
+        <br>
+        <button class="btn btn-success" onclick="commitToDatabase()">שמור נתונים</button>
+    </div>
+</div>
+
+<!-- חלון קופץ (Modal) לפירוט ועריכת הקטגוריה בלבד -->
+<div id="detailsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">פירוט עסקאות</h3>
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+        </div>
+        <p style="font-size: 13px; color: #666; margin-top: 5px;">* ניתן לשנות את הקטגוריה של העסקה ולשמור.</p>
+        <table style="margin-top: 10px;">
+            <thead>
+                <tr>
+                    <th>תאריך רכישה</th>
+                    <th>שם בית עסק</th>
+                    <th>סכום (₪)</th>
+                    <th>קטגוריה</th>
+                    <th>פעולה</th>
+                </tr>
+            </thead>
+            <tbody id="modalTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const categories = [
+        "מצרכים", "מיסים", "ביטוחים", "רכבים", "כדורסל", 
+        "חסכון", "מסעדות ובילויים", "שונות חד פעמי", 
+        "בריאות וטיפוח", "מתנות", "גוגל-אפל-בינה", 
+        "עמלות בנק", "ביגוד והנעלה", "שיפוץ/תיקון ורכש", "חריגים +500"
+    ];
+
+    const hebrewMonths = {
+        'ינואר': '01', 'פברואר': '02', 'מרץ': '03', 'אפריל': '04',
+        'מאי': '05', 'יוני': '06', 'יולי': '07', 'אוגוסט': '08',
+        'ספטמבר': '09', 'אוקטובר': '10', 'נובמבר': '11', 'דצמבר': '12'
+    };
+
+    let dbExpenses = JSON.parse(localStorage.getItem('app_expenses_db')) || [];
+    let merchantMemory = JSON.parse(localStorage.getItem('app_merchant_memory')) || {};
+    let tempTransactions = [];
+
+    document.addEventListener("DOMContentLoaded", () => {
+        populateMonthFilter();
+        renderPermTable();
+    });
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array', raw: false });
+            const sheetName = workbook.SheetNames[0];
+            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: false });
+            processExcelData(jsonData);
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function cleanString(str) {
+        if (!str) return '';
+        return String(str).replace(/[\u200B-\u200D\uFEFF\u202A-\u202E]/g, '').trim();
+    }
+
+    function formatDateToISO(dateVal) {
+        let dateStr = cleanString(dateVal);
+        if (!dateStr) return '';
+        
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+        
+        let parts = dateStr.split(/[\/\.-]/);
+        if (parts.length === 3) {
+            if (parts[0].length === 4) {
+                return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+            } else {
+                let year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+                return `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+        }
+        return dateStr;
+    }
+
+    function formatDateToDisplay(isoStr) {
+        if (!isoStr) return '';
+        let parts = String(isoStr).split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}.${parts[1]}.${parts[0].slice(2)}`;
+        }
+        return isoStr;
+    }
+
+    // זיהוי חודש ושנת החיוב מכותרת הדוח (למשל: "ספטמבר 2026")
+    function extractStatementMonth(data) {
+        for (let r = 0; r < Math.min(10, data.length); r++) {
+            let row = data[r];
+            if (!row) continue;
+            for (let c = 0; c < row.length; c++) {
+                let val = cleanString(row[c]);
+                if (!val) continue;
+                for (let [mName, mNum] of Object.entries(hebrewMonths)) {
+                    if (val.includes(mName)) {
+                        let yearMatch = val.match(/\b(20\d{2})\b/);
+                        if (yearMatch) {
+                            return `${yearMatch[1]}-${mNum}`;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function processExcelData(data) {
+        tempTransactions = [];
+        
+        // זיהוי חודש החיוב מכותרת הקובץ
+        const statementMonth = extractStatementMonth(data);
+
+        for (let i = 0; i < data.length; i++) {
+            let row = data[i];
+            if (!row || row.length === 0) continue;
+
+            let dateVal = cleanString(row[0]);
+            let merchantVal = cleanString(row[1]);
+            
+            if (/^\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}$/.test(dateVal) && merchantVal.length > 0) {
+                let rawAmount = row[4] !== undefined && row[4] !== null && row[4] !== '' ? row[4] : row[2];
+                if (rawAmount !== undefined && rawAmount !== null) {
+                    rawAmount = String(rawAmount).replace(/[₪,\s]/g, '');
+                }
+                let amount = parseFloat(rawAmount);
+
+                if (!isNaN(amount) && amount > 0) {
+                    const parsedPDate = formatDateToISO(dateVal);
+                    // אם זוהה חודש חיוב בכותרת נשתמש בו, אחרת נשתמש בתאריך הרכישה
+                    const calculatedChargeMonth = statementMonth ? statementMonth : parsedPDate.substring(0, 7);
+
+                    tempTransactions.push({
+                        id: Date.now() + Math.random(),
+                        purchaseDate: parsedPDate,
+                        chargeDateMonth: calculatedChargeMonth,
+                        merchant: merchantVal,
+                        amount: amount,
+                        category: suggestCategory(merchantVal, amount)
+                    });
+                }
+            }
+        }
+
+        if (tempTransactions.length === 0) {
+            alert('לא נשלפו נתונים. ודא שהקובץ תקין.');
+        } else {
+            renderTempTable();
+        }
+    }
+
+    function suggestCategory(merchant, amount) {
+        const cleanMerchant = cleanString(merchant);
+
+        if (merchantMemory[cleanMerchant]) {
+            return merchantMemory[cleanMerchant];
+        }
+
+        const m = cleanMerchant.toLowerCase();
+        if (m.includes('apple') || m.includes('prime video') || m.includes('google')) return 'גוגל-אפל-בינה';
+        if (m.includes('אושר עד') || m.includes('מכולת') || m.includes('דליקטס') || m.includes('שופרסל')) return 'מצרכים';
+        if (m.includes('כביש') || m.includes('פנגו') || m.includes('דרך ארץ') || m.includes('אלון') || m.includes('סונול') || m.includes('דיזול')) return 'רכבים';
+        if (m.includes('ארומה') || m.includes('מפגש החוף') || m.includes('לגנדה') || m.includes('לנדוור') || m.includes('זהרה') || m.includes('באולינג') || m.includes('שאולי')) return 'מסעדות ובילויים';
+        if (m.includes('סופר פארם') || m.includes('מכבי')) return 'בריאות וטיפוח';
+        if (m.includes('זארה') || m.includes('קסטרו') || m.includes('פוקס') || m.includes('רנואר') || m.includes('נייקי') || m.includes('אדידס')) return 'ביגוד והנעלה';
+        if (m.includes('חומרי בני') || m.includes('בניין') || m.includes('איקאה') || m.includes('הום סנטר') || m.includes('אייס')) return 'שיפוץ/תיקון ורכש';
+        if (m.includes('מגדל')) return 'ביטוחים';
+        if (m.includes('עיריית') || m.includes('מעיינות')) return 'מיסים';
+        if (parseFloat(amount) >= 500) return 'חריגים +500';
+        return 'שונות חד פעמי';
+    }
+
+    function updateMerchantMemory(merchant, category) {
+        const cleanMerchant = cleanString(merchant);
+        if (cleanMerchant && category) {
+            merchantMemory[cleanMerchant] = category;
+            localStorage.setItem('app_merchant_memory', JSON.stringify(merchantMemory));
+        }
+    }
+
+    function renderTempTable() {
+        const tbody = document.getElementById('tempTableBody');
+        tbody.innerHTML = '';
+        tempTransactions.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            let optionsHtml = '<option value="">בחר קטגוריה</option>';
+            categories.forEach(cat => {
+                const selected = cat === item.category ? 'selected' : '';
+                optionsHtml += `<option value="${cat}" ${selected}>${cat}</option>`;
+            });
+
+            tr.innerHTML = `
+                <td>${formatDateToDisplay(item.purchaseDate)}</td>
+                <td>${item.merchant}</td>
+                <td class="amount">₪${item.amount.toFixed(2)}</td>
+                <td>
+                    <select onchange="tempTransactions[${index}].category = this.value; updateMerchantMemory('${item.merchant.replace(/'/g, "\\'")}', this.value);">
+                        ${optionsHtml}
+                    </select>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function commitToDatabase() {
+        if (tempTransactions.length === 0) return alert('אין תנועות לקליטה.');
+
+        tempTransactions.forEach(item => {
+            if (item.merchant && item.category) {
+                merchantMemory[cleanString(item.merchant)] = item.category;
+            }
+        });
+        localStorage.setItem('app_merchant_memory', JSON.stringify(merchantMemory));
+
+        dbExpenses.push(...tempTransactions);
+        localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
+
+        tempTransactions = [];
+        renderTempTable();
+        document.getElementById('fileInput').value = '';
+
+        populateMonthFilter();
+        renderPermTable();
+        
+        const permTabBtn = document.getElementById('permTabBtn');
+        openTab('permTab', { currentTarget: permTabBtn });
+    }
+
+    function populateMonthFilter() {
+        const monthSelect = document.getElementById('monthFilter');
+        const selectedVal = monthSelect.value;
+        monthSelect.innerHTML = '<option value="all">כל החודשים</option>';
+
+        const monthsSet = new Set();
+        dbExpenses.forEach(item => {
+            const monthToUse = item.chargeDateMonth || (item.purchaseDate ? item.purchaseDate.substring(0, 7) : null);
+            if (monthToUse) {
+                monthsSet.add(monthToUse);
+            }
+        });
+
+        Array.from(monthsSet).sort().reverse().forEach(m => {
+            const [y, mNum] = m.split('-');
+            const option = document.createElement('option');
+            option.value = m;
+            option.textContent = `${mNum}/${y}`;
+            monthSelect.appendChild(option);
+        });
+
+        if (monthsSet.has(selectedVal)) {
+            monthSelect.value = selectedVal;
+        }
+    }
+
+    function getFilteredExpenses() {
+        const selectedMonth = document.getElementById('monthFilter').value;
+        if (selectedMonth === 'all') return dbExpenses;
+
+        return dbExpenses.filter(item => {
+            const monthToUse = item.chargeDateMonth || (item.purchaseDate ? item.purchaseDate.substring(0, 7) : null);
+            return monthToUse === selectedMonth;
+        });
+    }
+
+    function renderPermTable() {
+        const tbody = document.getElementById('permTableBody');
+        tbody.innerHTML = '';
+
+        const filtered = getFilteredExpenses();
+        const summary = {};
+        let grandTotal = 0;
+        let grandCount = 0;
+
+        filtered.forEach(item => {
+            const cat = item.category || 'שונות חד פעמי';
+            if (!summary[cat]) {
+                summary[cat] = { count: 0, total: 0 };
+            }
+            summary[cat].count += 1;
+            summary[cat].total += item.amount;
+
+            grandTotal += item.amount;
+            grandCount += 1;
+        });
+
+        const sortedSummary = Object.entries(summary).sort((a, b) => b[1].total - a[1].total);
+
+        for (const [cat, data] of sortedSummary) {
+            const tr = document.createElement('tr');
+            tr.className = 'clickable-row';
+            tr.onclick = () => showCategoryDetails(cat);
+            tr.innerHTML = `
+                <td><strong>${cat}</strong></td>
+                <td>${data.count}</td>
+                <td class="amount">₪${data.total.toFixed(2)}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        document.getElementById('totalCount').innerText = grandCount;
+        document.getElementById('totalAmount').innerText = `₪${grandTotal.toFixed(2)}`;
+    }
+
+    let currentCategoryModal = '';
+
+    function showCategoryDetails(category) {
+        currentCategoryModal = category;
+        const filtered = getFilteredExpenses().filter(item => (item.category || 'שונות חד פעמי') === category);
+        
+        filtered.sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate));
+
+        document.getElementById('modalTitle').innerText = `פירוט עסקאות - ${category}`;
+        const tbody = document.getElementById('modalTableBody');
+        tbody.innerHTML = '';
+
+        filtered.forEach(item => {
+            const tr = document.createElement('tr');
+            
+            let catOptions = '';
+            categories.forEach(cat => {
+                const sel = cat === item.category ? 'selected' : '';
+                catOptions += `<option value="${cat}" ${sel}>${cat}</option>`;
+            });
+
+            tr.innerHTML = `
+                <td>${formatDateToDisplay(item.purchaseDate)}</td>
+                <td>${item.merchant}</td>
+                <td class="amount">₪${item.amount.toFixed(2)}</td>
+                <td>
+                    <select class="edit-select" id="cat_${item.id}">
+                        ${catOptions}
+                    </select>
+                </td>
+                <td>
+                    <button class="btn btn-primary" onclick="saveTransactionCategory(${item.id})">שמור</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('detailsModal').style.display = 'block';
+    }
+
+    function saveTransactionCategory(id) {
+        const newCat = document.getElementById(`cat_${id}`).value;
+
+        const dbIndex = dbExpenses.findIndex(item => item.id === id);
+        if (dbIndex !== -1) {
+            dbExpenses[dbIndex].category = newCat;
+            updateMerchantMemory(dbExpenses[dbIndex].merchant, newCat);
+
+            localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
+
+            renderPermTable();
+            showCategoryDetails(currentCategoryModal);
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('detailsModal').style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('detailsModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    };
+
+    function clearDatabase() {
+        if (confirm('האם למחוק את כל הנתונים ב-Database ובזיכרון הקטגוריות?')) {
+            localStorage.removeItem('app_expenses_db');
+            localStorage.removeItem('app_merchant_memory');
+            dbExpenses = [];
+            merchantMemory = {};
+            populateMonthFilter();
+            renderPermTable();
+        }
+    }
+
+    function openTab(tabId, evt) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        
+        document.getElementById(tabId).classList.add('active');
+        if (evt && evt.currentTarget) {
+            evt.currentTarget.classList.add('active');
+        }
+    }
+</script>
+
+</body>
+</html>
