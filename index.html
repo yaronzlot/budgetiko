@@ -28,18 +28,19 @@
         .btn-secondary { background-color: #6c757d; color: white; }
         .btn-warning { background-color: #ffc107; color: #212529; font-size: 13px; padding: 6px 12px; }
         .btn-primary { background-color: #0056b3; color: white; padding: 5px 12px; font-size: 13px; }
-        select, input[type="text"] { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+        select, input[type="text"], textarea { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
         .amount { font-weight: bold; color: #dc3545; }
         .total-row { background-color: #e2e3e5; font-weight: bold; }
         .gemini-badge { font-size: 12px; color: #666; font-style: italic; text-align: left; margin-bottom: 5px; }
         
         /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
-        .modal-content { background-color: #fff; margin: 4% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 850px; max-height: 85vh; overflow-y: auto; }
+        .modal-content { background-color: #fff; margin: 2% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 1000px; max-height: 90vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
         .close-btn { font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
         .close-btn:hover { color: #000; }
-        .edit-select, .note-input { font-size: 13px; padding: 4px; width: 100%; box-sizing: border-box; }
+        .edit-select { font-size: 13px; padding: 4px; width: 100%; box-sizing: border-box; }
+        .note-input { font-size: 13px; padding: 6px; width: 100%; box-sizing: border-box; border: 1px solid #b0c4de; background-color: #fbfdff; min-height: 36px; }
         .cat-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
         
         .admin-box { background-color: #f8f9fa; border: 1px solid #e0e0e0; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
@@ -113,11 +114,11 @@
         <table>
             <thead>
                 <tr>
-                    <th>תאריך רכישה</th>
-                    <th>שם בית עסק</th>
-                    <th>סכום חיוב (₪)</th>
-                    <th>שיוך לקטגוריה</th>
-                    <th>הערה / פירוט הוצאה</th>
+                    <th style="width: 12%;">תאריך רכישה</th>
+                    <th style="width: 22%;">שם בית עסק</th>
+                    <th style="width: 12%;">סכום חיוב (₪)</th>
+                    <th style="width: 18%;">שיוך לקטגוריה</th>
+                    <th style="width: 36%;">הערה / פירוט הוצאה</th>
                 </tr>
             </thead>
             <tbody id="tempTableBody"></tbody>
@@ -134,20 +135,38 @@
             <h3 id="modalTitle">פירוט עסקאות</h3>
             <span class="close-btn" onclick="closeModal('detailsModal')">&times;</span>
         </div>
-        <p style="font-size: 13px; color: #666; margin-top: 5px;">* ניתן לערוך את הקטגוריה וההערה של העסקה וללחוץ שמור.</p>
+        <p style="font-size: 13px; color: #666; margin-top: 5px;">* לחץ על שורת עסקה או עדכן את השדות ישירות ולחץ שמור.</p>
         <table style="margin-top: 10px;">
             <thead>
                 <tr>
-                    <th style="width: 12%;">תאריך</th>
-                    <th style="width: 25%;">שם בית עסק</th>
-                    <th style="width: 13%;">סכום (₪)</th>
-                    <th style="width: 20%;">קטגוריה</th>
-                    <th style="width: 20%;">הערה</th>
-                    <th style="width: 10%;">פעולה</th>
+                    <th style="width: 10%;">תאריך</th>
+                    <th style="width: 20%;">שם בית עסק</th>
+                    <th style="width: 12%;">סכום (₪)</th>
+                    <th style="width: 18%;">קטגוריה</th>
+                    <th style="width: 32%;">הערה (שדה מורחב)</th>
+                    <th style="width: 8%;">פעולה</th>
                 </tr>
             </thead>
             <tbody id="modalTableBody"></tbody>
         </table>
+    </div>
+</div>
+
+<!-- חלון קופץ: הצגה ועריכה מורחבת של הערה בודדת -->
+<div id="expandedNoteModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3 id="expNoteTitle">עריכת הערה</h3>
+            <span class="close-btn" onclick="closeModal('expandedNoteModal')">&times;</span>
+        </div>
+        <div style="margin-top: 15px;">
+            <label for="expNoteTextarea"><strong>פירוט והערה מלאה לעסקה:</strong></label>
+            <textarea id="expNoteTextarea" rows="6" style="width: 100%; margin-top: 8px; box-sizing: border-box; font-size: 14px; padding: 8px;"></textarea>
+            <input type="hidden" id="expNoteTxId">
+            <div style="margin-top: 15px; text-align: left;">
+                <button class="btn btn-primary" onclick="saveExpandedNote()">שמור הערה</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -590,7 +609,14 @@
 
         filtered.forEach(item => {
             const tr = document.createElement('tr');
+            tr.className = 'clickable-row';
             
+            // בלחיצה על השורה נפתח חלון עריכת ההערה המורחב
+            tr.onclick = (e) => {
+                if (['INPUT', 'SELECT', 'BUTTON'].includes(e.target.tagName)) return;
+                openExpandedNote(item.id);
+            };
+
             let catOptions = '';
             categories.forEach(cat => {
                 const sel = cat === item.category ? 'selected' : '';
@@ -607,7 +633,7 @@
                     </select>
                 </td>
                 <td>
-                    <input type="text" class="note-input" id="note_${item.id}" value="${item.note || ''}" placeholder="הערה...">
+                    <input type="text" class="note-input" id="note_${item.id}" value="${item.note || ''}" placeholder="לחץ כאן או על השורה להערה מלאה...">
                 </td>
                 <td>
                     <button class="btn btn-primary" onclick="saveTransactionDetails(${item.id})">שמור</button>
@@ -617,6 +643,33 @@
         });
 
         document.getElementById('detailsModal').style.display = 'block';
+    }
+
+    function openExpandedNote(id) {
+        const item = dbExpenses.find(x => x.id === id);
+        if (!item) return;
+
+        document.getElementById('expNoteTitle').innerText = `עריכת הערה - ${item.merchant}`;
+        document.getElementById('expNoteTextarea').value = item.note || '';
+        document.getElementById('expNoteTxId').value = id;
+        document.getElementById('expandedNoteModal').style.display = 'block';
+    }
+
+    function saveExpandedNote() {
+        const id = parseFloat(document.getElementById('expNoteTxId').value);
+        const newNote = document.getElementById('expNoteTextarea').value;
+
+        const dbIndex = dbExpenses.findIndex(item => item.id === id);
+        if (dbIndex !== -1) {
+            dbExpenses[dbIndex].note = newNote;
+            localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
+
+            // עדכון השדה הקיים בטבלה
+            const inputField = document.getElementById(`note_${id}`);
+            if (inputField) inputField.value = newNote;
+
+            closeModal('expandedNoteModal');
+        }
     }
 
     function saveTransactionDetails(id) {
@@ -649,9 +702,11 @@
         const modal1 = document.getElementById('detailsModal');
         const modal2 = document.getElementById('categoryManageModal');
         const modal3 = document.getElementById('adminModal');
+        const modal4 = document.getElementById('expandedNoteModal');
         if (event.target === modal1) closeModal('detailsModal');
         if (event.target === modal2) closeModal('categoryManageModal');
         if (event.target === modal3) closeModal('adminModal');
+        if (event.target === modal4) closeModal('expandedNoteModal');
     };
 
     function clearDatabase() {
