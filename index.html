@@ -42,7 +42,7 @@
 
         /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
-        .modal-content { background-color: #fff; margin: 2% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 1000px; max-height: 90vh; overflow-y: auto; }
+        .modal-content { background-color: #fff; margin: 2% auto; padding: 20px; border-radius: 8px; width: 95%; max-width: 1050px; max-height: 90vh; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
         .close-btn { font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
         .close-btn:hover { color: #000; }
@@ -57,6 +57,7 @@
         .manual-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; }
         .manual-form label { font-size: 13px; font-weight: bold; display: block; margin-bottom: 4px; }
         .manual-form input { width: 100%; box-sizing: border-box; }
+        .action-cell { display: flex; gap: 4px; align-items: center; }
     </style>
 </head>
 <body>
@@ -143,23 +144,23 @@
     </div>
 </div>
 
-<!-- חלון קופץ: פירוט ועריכת הקטגוריה וההערה של עסקה -->
+<!-- חלון קופץ: פירוט ועריכת הקטגוריה, ההערה ומחיקה של עסקה -->
 <div id="detailsModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="modalTitle">פירוט עסקאות</h3>
             <span class="close-btn" onclick="closeModal('detailsModal')">&times;</span>
         </div>
-        <p style="font-size: 13px; color: #666; margin-top: 5px;">* לחץ על שורת עסקה או עדכן את השדות ישירות ולחץ שמור.</p>
+        <p style="font-size: 13px; color: #666; margin-top: 5px;">* לחץ על שורת עסקה או עדכן את השדות ישירות ולחץ שמור. ניתן למחוק עסקה בלחיצה על "מחק".</p>
         <table style="margin-top: 10px;">
             <thead>
                 <tr>
                     <th style="width: 10%;">תאריך</th>
                     <th style="width: 20%;">שם בית עסק / תיאור</th>
                     <th style="width: 12%;">סכום (₪)</th>
-                    <th style="width: 18%;">קטגוריה</th>
-                    <th style="width: 32%;">הערה (שדה מורחב)</th>
-                    <th style="width: 8%;">פעולה</th>
+                    <th style="width: 16%;">קטגוריה</th>
+                    <th style="width: 28%;">הערה (שדה מורחב)</th>
+                    <th style="width: 14%;">פעולות</th>
                 </tr>
             </thead>
             <tbody id="modalTableBody"></tbody>
@@ -305,7 +306,6 @@
             saveCategories();
         }
         
-        // הגדרת תאריך ברירת מחדל להוצאה ידנית בטופס (היום)
         const today = new Date().toISOString().split('T')[0];
         const manualDateElem = document.getElementById('manualDate');
         if (manualDateElem) {
@@ -355,7 +355,6 @@
         dbExpenses.push(newExpense);
         localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
 
-        // ניקוי הטופס
         document.getElementById('manualMerchant').value = '';
         document.getElementById('manualAmount').value = '';
 
@@ -363,6 +362,27 @@
         renderPermTable();
 
         alert(`הוצאת עו"ש על סך ₪${amount.toFixed(2)} עבור "${merchant}" נוספה בהצלחה!`);
+    }
+
+    function deleteSingleTransaction(id) {
+        const item = dbExpenses.find(x => x.id === id);
+        if (!item) return;
+
+        if (confirm(`האם למחוק את העסקה "${item.merchant}" על סך ₪${item.amount.toFixed(2)}?`)) {
+            dbExpenses = dbExpenses.filter(x => x.id !== id);
+            localStorage.setItem('app_expenses_db', JSON.stringify(dbExpenses));
+
+            populateMonthFilter();
+            renderPermTable();
+
+            // אם עדיין יש עסקאות בקטגוריה, נרענן את הפירוט, אחרת נסגור את החלון הצף
+            const remainingInCat = getFilteredExpenses().filter(x => (x.category || 'שונות חד פעמי') === currentCategoryModal);
+            if (remainingInCat.length > 0) {
+                showCategoryDetails(currentCategoryModal);
+            } else {
+                closeModal('detailsModal');
+            }
+        }
     }
 
     function addCategory() {
@@ -766,7 +786,10 @@
                     <input type="text" class="note-input" id="note_${item.id}" value="${item.note || ''}" placeholder="לחץ כאן או על השורה להערה מלאה...">
                 </td>
                 <td>
-                    <button class="btn btn-primary" onclick="saveTransactionDetails(${item.id})">שמור</button>
+                    <div class="action-cell">
+                        <button class="btn btn-primary" onclick="saveTransactionDetails(${item.id})">שמור</button>
+                        <button class="btn btn-danger" onclick="deleteSingleTransaction(${item.id})">מחק</button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
