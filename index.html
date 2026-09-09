@@ -70,7 +70,7 @@ body{
 
 .container{max-width:640px;margin:0 auto;padding:18px 16px 0;}
 
-/* ---- Login screen a---- */
+/* ---- Login screen ---- */
 #loginScreen{
   min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:24px;text-align:center;
@@ -97,11 +97,13 @@ h3.section-title{
 
 /* ---- Filter ---- */
 .filter-bar{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
   padding:12px 14px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--line);
   margin-bottom:6px;
 }
+.filter-bar-select{display:flex;align-items:center;gap:10px;}
 .filter-bar label{font-size:13px;color:var(--ink-dim);}
+.filter-total{font-family:var(--font-mono);font-weight:600;font-size:16px;color:var(--gold);white-space:nowrap;}
 select,input[type="text"],input[type="number"],input[type="date"],input[type="month"],textarea{
   font-family:var(--font-body);
   background:var(--surface-2);color:var(--ink);
@@ -270,10 +272,13 @@ input[type="file"]{color:var(--ink-dim);font-size:13px;width:100%;}
       </div>
 
       <div class="filter-bar">
-        <label for="monthFilter">חודש חיוב:</label>
-        <select id="monthFilter" onchange="window.__budgetiko.renderPermTable()">
-          <option value="all">כל החודשים</option>
-        </select>
+        <div class="filter-bar-select">
+          <label for="monthFilter">חודש חיוב:</label>
+          <select id="monthFilter" onchange="window.__budgetiko.renderPermTable()">
+            <option value="all">כל החודשים</option>
+          </select>
+        </div>
+        <div class="filter-total" id="filterTotalAmount">₪0.00</div>
       </div>
       <div id="expenseMonthTitle" class="month-caption"></div>
 
@@ -464,6 +469,7 @@ let dbExpenses = [];
 let merchantMemory = {};
 let tempTransactions = [];
 let currentCategoryModal = '';
+let monthFilterDefaulted = false;
 let currentUser = null;
 let unsubExpenses = null, unsubSettings = null;
 
@@ -656,7 +662,7 @@ async function addManualBankExpense(){
   try{
     await addDoc(expensesCol(), {
       purchaseDate, chargeDateMonth:chargeMonth, merchant, amount, category:'עו"ש',
-      note:'הוצאה ידנית מהבנק (עו"ש)'
+      note:'הוצאה ידנית מהבנק (עו"ש)', source:'manual'
     });
     document.getElementById('manualMerchant').value='';
     document.getElementById('manualAmount').value='';
@@ -767,7 +773,7 @@ function processExcelData(data){
         const calculatedChargeMonth = statementMonth ? statementMonth : parsedPDate.substring(0,7);
         tempTransactions.push({
           tempId:'t'+Date.now()+Math.random(),
-          purchaseDate:parsedPDate, chargeDateMonth:calculatedChargeMonth,
+          purchaseDate:parsedPDate, chargeDateMonth:calculatedChargeMonth, source:'creditcard',
           merchant:merchantVal, amount:amount, category:suggestCategory(merchantVal,amount), note:''
         });
       }
@@ -838,40 +844,57 @@ async function commitToDatabase(){
 }
 
 /* ---------------- month filter / rendering ---------------- */
+/* חיובי כרטיס אשראי (source:'creditcard' או ללא source, לצורך תאימות לנתונים ישנים)
+   מוצגים תחת "חודש חיוב מינוס אחד" — כך שהמסננת משקפת את חודש הביצוע האמיתי של
+   הרכישות ולא את חודש החיוב בפועל בבנק. הוצאות ידניות (source:'manual', כגון עו"ש)
+   אינן מוזזות, כי הן כבר משויכות לחודש הנכון. */
+function shiftMonth(monthStr, delta){
+  if(!monthStr) return monthStr;
+  const [y,m] = monthStr.split('-').map(Number);
+  const d = new Date(y, (m-1)+delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function getEffectiveMonth(item){
+  const raw = item.chargeDateMonth || (item.purchaseDate ? item.purchaseDate.substring(0,7) : null);
+  if(!raw) return null;
+  return item.source==='manual' ? raw : shiftMonth(raw, -1);
+}
 function populateMonthFilter(){
   const monthSelect = document.getElementById('monthFilter');
   const selectedVal = monthSelect.value;
   monthSelect.innerHTML = '<option value="all">כל החודשים</option>';
   const monthsSet = new Set();
   dbExpenses.forEach(item=>{
-    const monthToUse = item.chargeDateMonth || (item.purchaseDate ? item.purchaseDate.substring(0,7) : null);
-    if(monthToUse) monthsSet.add(monthToUse);
+    const m = getEffectiveMonth(item);
+    if(m) monthsSet.add(m);
   });
+  const currentMonthStr = new Date().toISOString().slice(0,7);
+  monthsSet.add(currentMonthStr);
   Array.from(monthsSet).sort().reverse().forEach(m=>{
     const [y,mNum] = m.split('-');
     const option = document.createElement('option');
     option.value=m; option.textContent = `${mNum}/${y}`;
     monthSelect.appendChild(option);
   });
-  if(monthsSet.has(selectedVal)) monthSelect.value=selectedVal;
+  if(!monthFilterDefaulted){
+    monthSelect.value = currentMonthStr;
+    monthFilterDefaulted = true;
+  } else if(monthsSet.has(selectedVal)){
+    monthSelect.value=selectedVal;
+  }
 }
 function updateExpenseMonthTitle(selectedMonth){
   const titleDiv = document.getElementById('expenseMonthTitle');
   if(selectedMonth==='all'){ titleDiv.innerText=''; return; }
   const [yearStr,monthStr] = selectedMonth.split('-');
-  let year = parseInt(yearStr,10), month = parseInt(monthStr,10);
-  month -= 1;
-  if(month===0){ month=12; year-=1; }
-  const prevMonthName = hebrewMonthNames[month-1];
-  titleDiv.innerText = `הוצאות חודש ${prevMonthName} ${year}`;
+  const year = parseInt(yearStr,10), month = parseInt(monthStr,10);
+  const monthName = hebrewMonthNames[month-1];
+  titleDiv.innerText = `הוצאות חודש ${monthName} ${year}`;
 }
 function getFilteredExpenses(){
   const selectedMonth = document.getElementById('monthFilter').value;
   if(selectedMonth==='all') return dbExpenses;
-  return dbExpenses.filter(item=>{
-    const monthToUse = item.chargeDateMonth || (item.purchaseDate ? item.purchaseDate.substring(0,7) : null);
-    return monthToUse===selectedMonth;
-  });
+  return dbExpenses.filter(item=> getEffectiveMonth(item)===selectedMonth);
 }
 function renderPermTable(){
   const selectedMonth = document.getElementById('monthFilter').value;
@@ -880,16 +903,21 @@ function renderPermTable(){
   wrap.innerHTML='';
 
   const filtered = getFilteredExpenses();
+
+  let grandTotal=0, grandCount=0;
+  filtered.forEach(item=>{ grandTotal+=item.amount; grandCount+=1; });
+  const totalEl = document.getElementById('filterTotalAmount');
+  if(totalEl) totalEl.textContent = `₪${grandTotal.toFixed(2)}`;
+
   if(filtered.length===0){
     wrap.innerHTML = `<div class="empty-state">אין עדיין הוצאות רשומות${selectedMonth!=='all'?' לחודש זה':''}.<br>עברו לטאב "קליטה" כדי להוסיף עסקאות.</div>`;
     return;
   }
-  const summary={}; let grandTotal=0, grandCount=0;
+  const summary={};
   filtered.forEach(item=>{
     const cat = item.category || 'שונות חד פעמי';
     if(!summary[cat]) summary[cat]={count:0,total:0};
     summary[cat].count+=1; summary[cat].total+=item.amount;
-    grandTotal+=item.amount; grandCount+=1;
   });
   const sortedSummary = Object.entries(summary).sort((a,b)=>b[1].total-a[1].total);
   sortedSummary.forEach(([cat,data])=>{
